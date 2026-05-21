@@ -1,0 +1,15 @@
+{
+  "name": "Panorama Paris",
+  "version": "1.0.0",
+  "description": "Panorama Paris",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'No build step needed'"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "author": "Michel Garlandat",
+  "license": "UNLICENSED"
+}
