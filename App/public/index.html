@@ -66,6 +66,14 @@ canvas#panorama.grabbing{cursor:grabbing}
 .pano-btn:active{background:var(--ink4)}
 .pano-info{flex:1;font-size:calc(11px * var(--fs));color:var(--text2);text-align:center}
 .pano-hint{font-size:calc(10px * var(--fs));color:var(--text2);text-align:center;margin-bottom:8px;font-style:italic}
+.search-wrap{position:relative;margin-bottom:10px}
+.search-inp{width:100%;background:var(--ink3);border:1px solid var(--ink4);border-radius:8px;color:var(--text);font-size:calc(14px * var(--fs));padding:10px 36px 10px 36px;font-family:'Georgia',serif;outline:none}
+.search-inp:focus{border-color:var(--gold)}
+.search-inp::placeholder{color:var(--text2)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none}
+.search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.12);border:none;border-radius:50%;color:var(--text2);font-size:13px;width:22px;height:22px;display:none;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+.search-clear:active{background:rgba(255,255,255,0.25)}
+.search-count{font-size:calc(10px * var(--fs));color:var(--text2);text-align:right;margin:-6px 0 8px;font-style:italic}
 /* FICHE DÉTAIL — modale plein écran */
 .detail-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;background:var(--ink);display:flex;flex-direction:column;overflow:hidden;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -82,7 +90,12 @@ canvas#panorama.grabbing{cursor:grabbing}
 .detail-rows{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:calc(12px * var(--fs));margin-bottom:14px}
 .detail-lbl{color:var(--text2)}
 .detail-val{color:var(--text)}
-.detail-desc{padding:0 16px 20px;font-size:calc(13px * var(--fs));color:var(--text2);line-height:1.7;font-style:italic;border-top:1px solid var(--ink4);padding-top:12px}
+.detail-desc{padding:0 16px 14px;font-size:calc(13px * var(--fs));color:var(--text2);line-height:1.7;font-style:italic;border-top:1px solid var(--ink4);padding-top:12px}
+.detail-nav{display:flex;gap:8px;padding:0 16px 20px}
+.nav-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-radius:8px;border:1px solid var(--ink4);font-size:calc(12px * var(--fs));font-family:'Georgia',serif;cursor:pointer;text-decoration:none}
+.nav-btn:active{opacity:.7}
+.nav-btn.apple{background:var(--ink3);color:var(--text);border-color:var(--ink4)}
+.nav-btn.google{background:#1a2a1a;color:#4CAF50;border-color:#2d4a2d}
 .detail-wrap{display:none}
 /* TABLE */
 .mon-table{width:100%;border-collapse:collapse}
@@ -195,6 +208,12 @@ canvas#panorama.grabbing{cursor:grabbing}
     <div class="legend" id="legend"></div>
     <div class="card">
       <div class="card-title" id="t-monuments">Monuments — distance & azimut</div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-inp" id="mon-search" type="text" placeholder="Rechercher un monument…" oninput="filterMonuments()" autocomplete="off" autocorrect="off">
+        <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+      </div>
+      <div class="search-count" id="search-count"></div>
       <table class="mon-table">
         <thead><tr>
           <th id="th-nom">Monument</th><th id="th-az">Az.</th>
@@ -213,7 +232,7 @@ canvas#panorama.grabbing{cursor:grabbing}
   <div class="quiz-card"><div class="quiz-q" id="quiz-q">Chargement...</div>
     <div class="quiz-opts" id="quiz-opts"></div></div>
   <button class="btn" onclick="nextQuiz()" id="btn-next" style="display:none">Question suivante →</button>
-  <button class="btn primary" onclick="startQuiz()">Nouvelle partie</button>
+  <button class="btn primary" onclick="startQuiz()" id="btn-newgame">🎲 Nouvelle partie</button>
 </div>
 
 <!-- SETTINGS -->
@@ -231,8 +250,8 @@ canvas#panorama.grabbing{cursor:grabbing}
     <div class="setting-row"><span class="setting-label">Hauteur</span><span class="setting-val" id="cfg-alt">—</span></div>
     <div class="setting-row"><span class="setting-label">Source</span><span class="setting-val" id="cfg-src">—</span></div></div>
   <div class="card"><div class="card-title">App</div>
-    <div class="setting-row"><span class="setting-label">Monuments</span><span class="setting-val">31</span></div>
-    <div class="setting-row"><span class="setting-label">Version</span><span class="setting-val">1.6</span></div></div>
+    <div class="setting-row"><span class="setting-label">Monuments</span><span class="setting-val">35</span></div>
+    <div class="setting-row"><span class="setting-label">Version</span><span class="setting-val">1.7</span></div></div>
 </div>
 
 <!-- MES APPS -->
@@ -267,231 +286,267 @@ canvas#panorama.grabbing{cursor:grabbing}
       </div>
     </div>
     <div class="detail-desc" id="detail-desc">—</div>
+    <div class="detail-nav" id="detail-nav">
+      <a class="nav-btn apple" id="btn-maps-apple" href="#" onclick="return false">
+        🗺 Plans
+      </a>
+      <a class="nav-btn google" id="btn-maps-google" href="#" onclick="return false">
+        📍 Google Maps
+      </a>
+    </div>
   </div>
 </div>
 
 <script>
 /* ===================== DONNÉES ===================== */
 /* wk = titre Wikipedia pour l'image */
-const MONUMENTS=[
-  {id:1,n_fr:"Tour Eiffel",n_en:"Eiffel Tower",lat:48.8584,lon:2.2945,h:330,cat:"tower",
-   annee:"1889",arch_fr:"Gustave Eiffel",arch_en:"Gustave Eiffel",
-   style_fr:"Fer forgé éclectique",style_en:"Wrought iron eclectic",
-   desc_fr:"Construite pour l'Exposition universelle de 1889, la Tour Eiffel fut d'abord décriée par les artistes parisiens avant de devenir le symbole de Paris et de la France.",
-   desc_en:"Built for the 1889 World's Fair, the Eiffel Tower was initially criticized by Parisian artists before becoming the symbol of Paris and France.",
-   wk:"Tour_Eiffel",
-   q_fr:"De quelle année date la Tour Eiffel ?",q_en:"When was the Eiffel Tower built?",ans:"1889",opts:["1855","1867","1889","1900"]},
-  {id:2,n_fr:"Arc de Triomphe",n_en:"Arc de Triomphe",lat:48.8738,lon:2.2950,h:50,cat:"arch",
-   annee:"1836",arch_fr:"Jean Chalgrin",arch_en:"Jean Chalgrin",
-   style_fr:"Néoclassique",style_en:"Neoclassical",
-   desc_fr:"Commandé par Napoléon en 1806 pour célébrer ses victoires, l'Arc de Triomphe abrite la tombe du Soldat Inconnu depuis 1920.",
-   desc_en:"Commissioned by Napoleon in 1806 to celebrate his victories, the Arc de Triomphe has housed the Tomb of the Unknown Soldier since 1920.",
-   wk:"Arc_de_triomphe_de_l'Étoile",
-   q_fr:"Qui a commandé l'Arc de Triomphe ?",q_en:"Who ordered the Arc de Triomphe?",ans:"Napoléon",opts:["Louis XIV","Napoléon","Victor Hugo","Haussmann"]},
-  {id:3,n_fr:"Cathédrale Notre-Dame",n_en:"Notre-Dame Cathedral",lat:48.8530,lon:2.3499,h:69,cat:"church",
-   annee:"1345",arch_fr:"Jean de Chelles, Pierre de Montreuil",arch_en:"Jean de Chelles, Pierre de Montreuil",
-   style_fr:"Gothique",style_en:"Gothic",
-   desc_fr:"Chef-d'œuvre du gothique parisien, Notre-Dame fut gravement endommagée par l'incendie d'avril 2019 et a rouvert ses portes en décembre 2024 après une restauration exceptionnelle.",
-   desc_en:"Masterpiece of Parisian Gothic, Notre-Dame was severely damaged by the April 2019 fire and reopened in December 2024 after an exceptional restoration.",
-   wk:"Cathédrale_Notre-Dame_de_Paris",
-   q_fr:"Quelle est la hauteur des tours de Notre-Dame ?",q_en:"Height of Notre-Dame towers?",ans:"69 m",opts:["45 m","55 m","69 m","80 m"]},
-  {id:4,n_fr:"Basilique du Sacré-Cœur",n_en:"Sacré-Cœur Basilica",lat:48.8867,lon:2.3431,h:108,cat:"church",
-   annee:"1914",arch_fr:"Paul Abadie",arch_en:"Paul Abadie",
-   style_fr:"Romano-byzantin",style_en:"Romano-Byzantine",
-   desc_fr:"Érigée au sommet de la butte Montmartre en hommage aux victimes de la guerre de 1870, la basilique offre un panorama exceptionnel sur Paris.",
-   desc_en:"Erected on top of the Montmartre hill as a tribute to the victims of the 1870 war, the basilica offers an exceptional panorama of Paris.",
-   wk:"Basilique_du_Sacré-Cœur_de_Montmartre",
-   q_fr:"Sur quelle butte se trouve le Sacré-Cœur ?",q_en:"On which hill is Sacré-Cœur?",ans:"Montmartre",opts:["Belleville","Chaillot","Montmartre","Montrouge"]},
-  {id:5,n_fr:"Tour Montparnasse",n_en:"Montparnasse Tower",lat:48.8422,lon:2.3218,h:210,cat:"tower",
-   annee:"1973",arch_fr:"Beaudouin, Cassan, de Marien, Saubot",arch_en:"Beaudouin, Cassan, de Marien, Saubot",
-   style_fr:"Modernisme international",style_en:"International modernism",
-   desc_fr:"Longtemps controversée pour son impact sur le paysage parisien, la Tour Montparnasse est en cours de rénovation pour afficher une nouvelle façade végétalisée.",
-   desc_en:"Long controversial for its impact on the Parisian landscape, Montparnasse Tower is being renovated to display a new green facade.",
-   wk:"Tour_Montparnasse",
-   q_fr:"Combien d'étages a la Tour Montparnasse ?",q_en:"How many floors?",ans:"59",opts:["45","52","59","67"]},
-  {id:6,n_fr:"Panthéon",n_en:"Panthéon",lat:48.8462,lon:2.3462,h:83,cat:"dome",
-   annee:"1790",arch_fr:"Jacques-Germain Soufflot",arch_en:"Jacques-Germain Soufflot",
-   style_fr:"Néoclassique",style_en:"Neoclassical",
-   desc_fr:"Initialement conçu comme église Sainte-Geneviève, le Panthéon est devenu le mausolée des grandes figures de la République française.",
-   desc_en:"Initially designed as the church of Sainte-Geneviève, the Panthéon became the mausoleum of great figures of the French Republic.",
-   wk:"Panthéon_(Paris)",
-   q_fr:"Qui est enterré au Panthéon ?",q_en:"Who is buried at the Panthéon?",ans:"Voltaire",opts:["Napoléon","Voltaire","Molière","Balzac"]},
-  {id:7,n_fr:"Opéra Garnier",n_en:"Palais Garnier",lat:48.8720,lon:2.3316,h:74,cat:"culture",
-   annee:"1875",arch_fr:"Charles Garnier",arch_en:"Charles Garnier",
-   style_fr:"Éclectisme Second Empire",style_en:"Second Empire eclecticism",
-   desc_fr:"Symbole du faste du Second Empire, l'Opéra Garnier fut le plus grand opéra du monde à son inauguration. Son escalier monumental et son grand lustre sont célèbres dans le monde entier.",
-   desc_en:"Symbol of the grandeur of the Second Empire, the Palais Garnier was the world's largest opera house at its inauguration.",
-   wk:"Opéra Garnier",
-   q_fr:"Qui a conçu l'Opéra Garnier ?",q_en:"Who designed the Palais Garnier?",ans:"Charles Garnier",opts:["Haussmann","Charles Garnier","Eiffel","Viollet-le-Duc"]},
-  {id:8,n_fr:"Musée du Louvre",n_en:"Louvre Museum",lat:48.8606,lon:2.3376,h:21,cat:"museum",
-   annee:"1793",arch_fr:"Pierre Lescot (palais), I. M. Pei (pyramide)",arch_en:"Pierre Lescot (palace), I. M. Pei (pyramid)",
-   style_fr:"Renaissance, moderne",style_en:"Renaissance, modern",
-   desc_fr:"Ancien palais royal devenu le plus grand musée du monde, le Louvre accueille plus de 9 millions de visiteurs par an. La pyramide de verre de Pei a été inaugurée en 1989.",
-   desc_en:"A former royal palace turned the world's largest museum, the Louvre welcomes over 9 million visitors a year.",
-   wk:"Musée_du_Louvre",
-   q_fr:"Quelle est la forme de la pyramide du Louvre ?",q_en:"Shape of the Louvre pyramid?",ans:"Triangle",opts:["Carré","Triangle","Hexagone","Octogone"]},
-  {id:9,n_fr:"Centre Pompidou",n_en:"Pompidou Center",lat:48.8607,lon:2.3522,h:42,cat:"culture",
-   annee:"1977",arch_fr:"Renzo Piano, Richard Rogers",arch_en:"Renzo Piano, Richard Rogers",
-   style_fr:"High-tech / Inside-out",style_en:"High-tech / Inside-out",
-   desc_fr:"Révolutionnaire à son ouverture, le Centre Pompidou expose ses structures et conduits techniques à l'extérieur, codés en couleurs selon leur fonction.",
-   desc_en:"Revolutionary at its opening, the Pompidou Centre exposes its structural and technical ducts on the outside, color-coded by function.",
-   wk:"Centre national d'art et de culture Georges-Pompidou",
-   q_fr:"En quelle année a ouvert le Centre Pompidou ?",q_en:"When did Centre Pompidou open?",ans:"1977",opts:["1968","1972","1977","1983"]},
-  {id:10,n_fr:"Colonne Vendôme",n_en:"Vendôme Column",lat:48.8676,lon:2.3296,h:44,cat:"arch",
-   annee:"1810",arch_fr:"Jacques Gondouin, Jean-Baptiste Lepère",arch_en:"Jacques Gondouin, Jean-Baptiste Lepère",
-   style_fr:"Néoclassique impérial",style_en:"Imperial neoclassical",
-   desc_fr:"Érigée par Napoléon, la Colonne Vendôme est recouverte d'une spirale en bronze fondu à partir de 1250 canons pris à Austerlitz.",
-   desc_en:"Erected by Napoleon, the Vendôme Column is covered with a spiral in bronze cast from 1,250 cannons captured at Austerlitz.",
-   wk:"Colonne_Vendôme",
-   q_fr:"Qui figure au sommet de la Colonne Vendôme ?",q_en:"Who is on top?",ans:"Napoléon",opts:["Louis XIV","Napoléon","Mars","Marianne"]},
-  {id:11,n_fr:"Sainte-Chapelle",n_en:"Sainte-Chapelle",lat:48.8554,lon:2.3450,h:75,cat:"church",
-   annee:"1248",arch_fr:"Thomas de Cormont (attribué)",arch_en:"Thomas de Cormont (attributed)",
-   style_fr:"Gothique rayonnant",style_en:"Rayonnant Gothic",
-   desc_fr:"Joyau du gothique rayonnant, la Sainte-Chapelle fut construite par Louis IX pour abriter la Couronne d'épines du Christ. Ses 15 vitraux représentent 1113 scènes bibliques.",
-   desc_en:"A jewel of Rayonnant Gothic, the Sainte-Chapelle was built by Louis IX to house the Crown of Thorns. Its 15 stained glass windows depict 1,113 biblical scenes.",
-   wk:"Sainte-Chapelle",
-   q_fr:"Pourquoi Louis IX fit-il construire la Sainte-Chapelle ?",q_en:"Why was Sainte-Chapelle built?",ans:"Pour les reliques",opts:["Pour couronner les rois","Pour les reliques","Pour les prières royales","Pour le Parlement"]},
-  {id:12,n_fr:"Hôtel des Invalides",n_en:"Les Invalides",lat:48.8566,lon:2.3131,h:107,cat:"dome",
-   annee:"1708",arch_fr:"Jules Hardouin-Mansart (dôme)",arch_en:"Jules Hardouin-Mansart (dome)",
-   style_fr:"Baroque classique français",style_en:"French classical baroque",
-   desc_fr:"Construit par Louis XIV pour loger les soldats invalides, le complexe abrite aujourd'hui le tombeau de Napoléon Bonaparte sous son célèbre dôme doré.",
-   desc_en:"Built by Louis XIV to house invalid soldiers, the complex now houses Napoleon Bonaparte's tomb under its famous gilded dome.",
-   wk:"Hôtel des Invalides",
-   q_fr:"Qui est enterré sous le dôme des Invalides ?",q_en:"Who is buried under the dome?",ans:"Napoléon",opts:["Vauban","Napoléon","Foch","De Gaulle"]},
-  {id:13,n_fr:"Palais Royal",n_en:"Palais Royal",lat:48.8638,lon:2.3370,h:20,cat:"palace",
-   annee:"1639",arch_fr:"Jacques Lemercier",arch_en:"Jacques Lemercier",
-   style_fr:"Baroque",style_en:"Baroque",
-   desc_fr:"Résidence du cardinal de Richelieu puis résidence royale, le Palais Royal abrite aujourd'hui le Conseil d'État. Ses colonnes de Buren dans la cour d'honneur sont une œuvre d'art contemporaine.",
-   desc_en:"Residence of Cardinal Richelieu then a royal residence, the Palais Royal now houses the Council of State. Buren's columns in the courtyard are a contemporary artwork.",
-   wk:"Palais-Royal",
-   q_fr:"Pour qui le Palais Royal fut-il construit ?",q_en:"For whom was the Palais Royal built?",ans:"Richelieu",opts:["Henri IV","Louis XIV","Richelieu","Mazarin"]},
-  {id:14,n_fr:"Château de Vincennes",n_en:"Château de Vincennes",lat:48.8484,lon:2.4339,h:52,cat:"castle",
-   annee:"1369",arch_fr:"Raymond du Temple",arch_en:"Raymond du Temple",
-   style_fr:"Gothique médiéval",style_en:"Medieval Gothic",
-   desc_fr:"Résidence royale favorite des Valois, le château de Vincennes possède le plus grand donjon médiéval d'Europe, dominant la forêt de Vincennes à l'est de Paris.",
-   desc_en:"Favorite royal residence of the Valois, Vincennes Castle has the largest medieval keep in Europe, overlooking the Vincennes forest east of Paris.",
-   wk:"Château_de_Vincennes",
-   q_fr:"Qu'est-ce que le Château de Vincennes à l'origine ?",q_en:"What was Vincennes originally?",ans:"Résidence royale",opts:["Prison militaire","Résidence royale","Cathédrale","Hôpital"]},
-  {id:15,n_fr:"Tour Saint-Jacques",n_en:"Tour Saint-Jacques",lat:48.8573,lon:2.3487,h:54,cat:"tower",
-   annee:"1523",arch_fr:"Jean de Félin (attribué)",arch_en:"Jean de Félin (attributed)",
-   style_fr:"Gothique flamboyant",style_en:"Flamboyant Gothic",
-   desc_fr:"Seul vestige de l'église Saint-Jacques-de-la-Boucherie détruite à la Révolution, cette tour fut utilisée par Pascal pour ses expériences sur la pression atmosphérique.",
-   desc_en:"The only remnant of the church of Saint-Jacques-de-la-Boucherie demolished during the Revolution, this tower was used by Pascal for his atmospheric pressure experiments.",
-   wk:"Tour_Saint-Jacques",
-   q_fr:"Que reste-t-il de l'église Saint-Jacques ?",q_en:"What remains of Saint-Jacques church?",ans:"Sa tour",opts:["La nef","Le chœur","Sa tour","La façade"]},
-  {id:16,n_fr:"Institut de France",n_en:"Institut de France",lat:48.8558,lon:2.3374,h:36,cat:"dome",
-   annee:"1688",arch_fr:"Louis Le Vau",arch_en:"Louis Le Vau",
-   style_fr:"Baroque classique",style_en:"Classical baroque",
-   desc_fr:"Regroupant cinq académies dont l'Académie française, l'Institut de France fut fondé par Mazarin comme collège des Quatre-Nations pour former les jeunes de provinces conquises.",
-   desc_en:"Grouping five academies including the Académie française, the Institut de France was founded by Mazarin as the Collège des Quatre-Nations.",
-   wk:"Institut de France",
-   q_fr:"Combien d'académies compose l'Institut de France ?",q_en:"How many academies?",ans:"5",opts:["3","4","5","7"]},
-  {id:17,n_fr:"Hôtel de Ville de Paris",n_en:"Paris City Hall",lat:48.8564,lon:2.3523,h:50,cat:"palace",
-   annee:"1882",arch_fr:"Théodore Ballu, Édouard Deperthes",arch_en:"Théodore Ballu, Édouard Deperthes",
-   style_fr:"Renaissance française",style_en:"French Renaissance",
-   desc_fr:"Reconstruit après l'incendie de la Commune en 1871, l'Hôtel de Ville actuel est une réplique enrichie de l'édifice du XVIe siècle. Il est le siège de la mairie de Paris.",
-   desc_en:"Rebuilt after the Commune fire in 1871, the current City Hall is an enriched replica of the 16th century building.",
-   wk:"Hôtel_de_ville_de_Paris",
-   q_fr:"Que s'est-il passé à l'Hôtel de Ville en 1871 ?",q_en:"What happened in 1871?",ans:"Il a brûlé",opts:["Il a été construit","Il a brûlé","Il est devenu musée","Il a été bombardé"]},
-  {id:18,n_fr:"Grande Arche de La Défense",n_en:"La Grande Arche",lat:48.8924,lon:2.2358,h:110,cat:"arch",
-   annee:"1989",arch_fr:"Johan Otto von Spreckelsen",arch_en:"Johan Otto von Spreckelsen",
-   style_fr:"Déconstructivisme",style_en:"Deconstructivism",
-   desc_fr:"Inaugurée le jour du bicentenaire de la Révolution française, la Grande Arche de La Défense est un cube creux de 110 m de côté, dans lequel la cathédrale Notre-Dame pourrait tenir.",
-   desc_en:"Inaugurated on the bicentenary of the French Revolution, La Grande Arche is a hollow cube of 110m per side, large enough to contain Notre-Dame Cathedral.",
-   wk:"Arche de la Défense",
-   q_fr:"En quelle année a été inaugurée la Grande Arche ?",q_en:"When was La Grande Arche inaugurated?",ans:"1989",opts:["1968","1981","1989","1995"]},
-  {id:19,n_fr:"BNF François-Mitterrand",n_en:"National Library of France",lat:48.8354,lon:2.3477,h:79,cat:"culture",
-   annee:"1996",arch_fr:"Dominique Perrault",arch_en:"Dominique Perrault",
-   style_fr:"Modernisme minimaliste",style_en:"Minimalist modernism",
-   desc_fr:"Les quatre tours en forme de livres ouverts symbolisent l'ouverture du savoir. La bibliothèque conserve plus de 14 millions de documents et 40 km de rayonnages.",
-   desc_en:"The four towers shaped like open books symbolize the opening of knowledge. The library holds over 14 million documents and 40km of shelving.",
-   wk:"Bibliothèque_nationale_de_France",
-   q_fr:"Quelle est la forme des tours de la BNF ?",q_en:"Shape of the BNF towers?",ans:"Livres ouverts",opts:["Cylindres","Pyramides","Livres ouverts","Croix"]},
-  {id:20,n_fr:"Obélisque de la Concorde",n_en:"Obelisk of Concorde",lat:48.8654,lon:2.3212,h:23,cat:"arch",
-   annee:"1836",arch_fr:"Égypte antique (Ramsès II)",arch_en:"Ancient Egypt (Ramesses II)",
-   style_fr:"Égyptien antique",style_en:"Ancient Egyptian",
-   desc_fr:"Offert par Méhémet Ali à la France, cet obélisque de Louxor date de 3200 ans. Il fut dressé place de la Concorde en 1836, à l'emplacement même de la guillotine révolutionnaire.",
-   desc_en:"Offered by Mehmet Ali to France, this Luxor obelisk is 3,200 years old. It was erected in 1836 at the very spot where the revolutionary guillotine stood.",
-   wk:"Obélisque de Louxor",
-   q_fr:"D'où vient l'Obélisque de la Concorde ?",q_en:"Where does it come from?",ans:"Louxor, Égypte",opts:["Grèce","Rome","Louxor, Égypte","Babylone"]},
-  {id:21,n_fr:"Moulin Rouge",n_en:"Moulin Rouge",lat:48.8842,lon:2.3324,h:15,cat:"culture",
-   annee:"1889",arch_fr:"Édouard Zidler, Joseph Oller",arch_en:"Édouard Zidler, Joseph Oller",
-   style_fr:"Belle Époque",style_en:"Belle Époque",
-   desc_fr:"Symbole de la vie nocturne parisienne, le Moulin Rouge est célèbre pour avoir popularisé le french cancan. Toulouse-Lautrec en a immortalisé l'ambiance dans ses affiches.",
-   desc_en:"Symbol of Parisian nightlife, the Moulin Rouge is famous for popularizing the French cancan. Toulouse-Lautrec immortalized its atmosphere in his posters.",
-   wk:"Moulin-Rouge",
-   q_fr:"En quelle année a ouvert le Moulin Rouge ?",q_en:"When did Moulin Rouge open?",ans:"1889",opts:["1875","1889","1900","1912"]},
-  {id:22,n_fr:"Palais de Chaillot",n_en:"Palais de Chaillot",lat:48.8616,lon:2.2870,h:65,cat:"palace",
-   annee:"1937",arch_fr:"Carlu, Boileau, Azéma",arch_en:"Carlu, Boileau, Azéma",
-   style_fr:"Art déco monumental",style_en:"Monumental Art Deco",
-   desc_fr:"Construit pour l'Exposition universelle de 1937, le Palais de Chaillot offre la plus belle vue frontale sur la Tour Eiffel. Il abrite plusieurs musées dont le musée de la Marine.",
-   desc_en:"Built for the 1937 World's Fair, the Palais de Chaillot offers the finest frontal view of the Eiffel Tower. It houses several museums including the Naval Museum.",
-   wk:"Palais_de_Chaillot",
-   q_fr:"Pour quelle exposition a été construit le Palais de Chaillot ?",q_en:"For which expo was it built?",ans:"1937",opts:["1900","1920","1937","1951"]},
-  {id:23,n_fr:"Tour First (La Défense)",n_en:"Tour First (La Défense)",lat:48.8927,lon:2.2378,h:231,cat:"tower",
-   annee:"1974",arch_fr:"Skidmore, Owings & Merrill (rénovation 2011)",arch_en:"Skidmore, Owings & Merrill (2011 renovation)",
-   style_fr:"Modernisme",style_en:"Modernism",
-   desc_fr:"Tour la plus haute de France et d'Europe occidentale lors de sa rénovation en 2011, la Tour First culmine à 231 m et accueille le siège de BNP Paribas.",
-   desc_en:"The tallest tower in France and Western Europe when renovated in 2011, Tour First stands 231m tall and houses BNP Paribas headquarters.",
-   wk:"Tour_First",
-   q_fr:"Quelle est la tour la plus haute de La Défense ?",q_en:"What is the tallest tower at La Défense?",ans:"Tour First",opts:["Tour Total","Tour First","Tour Majunga","Tour Hekla"]},
-  {id:24,n_fr:"Tour Total Énergies (Défense)",n_en:"Tour TotalEnergies (La Défense)",lat:48.8921,lon:2.2390,h:187,cat:"tower",
-   annee:"1985",arch_fr:"Roger Saubot, François Jullien",arch_en:"Roger Saubot, François Jullien",
-   style_fr:"Modernisme",style_en:"Modernism",
-   desc_fr:"Siège mondial de TotalEnergies, cette tour de 187 m est l'une des plus reconnaissables du quartier de La Défense avec sa façade entièrement vitrée.",
-   desc_en:"Global headquarters of TotalEnergies, this 187m tower is one of the most recognizable in the La Défense district with its fully glazed facade.",
-   wk:"Tour TotalEnergies (Coupole)",
-   q_fr:"Combien de tours dépassent 150 m à La Défense ?",q_en:"How many towers exceed 150m at La Défense?",ans:"Plus de 15",opts:["5","10","Plus de 15","30"]},
-  {id:25,n_fr:"Tour Hekla (La Défense)",n_en:"Tour Hekla (La Défense)",lat:48.8926,lon:2.2365,h:323,cat:"tower",
-   annee:"2026 (en cours)",arch_fr:"Ateliers Jean Nouvel",arch_en:"Ateliers Jean Nouvel",
-   style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
-   desc_fr:"Projet de tour de 323 m conçu par Jean Nouvel pour La Défense, baptisée Hekla en référence au volcan islandais. Elle serait la plus haute tour de France à sa livraison.",
-   desc_en:"A 323m tower project designed by Jean Nouvel for La Défense, named after the Icelandic volcano Hekla. It would be the tallest tower in France upon completion.",
-   wk:"Tour_Hekla",
-   q_fr:"Quel est le nom de l'architecte de la Tour Hekla ?",q_en:"Who designed Tour Hekla?",ans:"Jean Nouvel",opts:["Foster","Hadid","Jean Nouvel","Piano"]},
-  {id:26,n_fr:"Tour Triangle (15e)",n_en:"Tour Triangle (15th arr.)",lat:48.8397,lon:2.2875,h:180,cat:"tower",
-   annee:"2028 (prévu)",arch_fr:"Herzog & de Meuron",arch_en:"Herzog & de Meuron",
-   style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
-   desc_fr:"Projet de tour triangulaire de 180 m dans le 15e arrondissement, conçu par les architectes suisses Herzog & de Meuron. Sa silhouette en prisme transformera l'horizon sud de Paris.",
-   desc_en:"A 180m triangular tower project in the 15th arrondissement, designed by Swiss architects Herzog & de Meuron. Its prism-shaped silhouette will transform the southern Paris skyline.",
-   wk:"Tour Triangle",
-   q_fr:"Quel est le nom de l'architecte de la Tour Triangle ?",q_en:"Who designed the Tour Triangle?",ans:"Herzog & de Meuron",opts:["Foster","Hadid","Herzog & de Meuron","Piano"]},
-  {id:27,n_fr:"\u00c9glise Saint-Sulpice",n_en:"Saint-Sulpice Church",lat:48.8508,lon:2.3349,h:73,cat:"church",
-   annee:"1745",arch_fr:"Giovanni Servandoni",arch_en:"Giovanni Servandoni",
-   style_fr:"Baroque / N\u00e9oclassique",style_en:"Baroque / Neoclassical",
-   desc_fr:"Deuxi\u00e8me plus grande \u00e9glise de Paris apr\u00e8s Notre-Dame, Saint-Sulpice est c\u00e9l\u00e8bre pour son orgue monumental, ses fresques de Delacroix et son gnomon au sol rendu c\u00e9l\u00e8bre par le Da Vinci Code.",
-   desc_en:"The second largest church in Paris after Notre-Dame, Saint-Sulpice is famous for its monumental organ, Delacroix frescoes, and its floor gnomon made famous by The Da Vinci Code.",
-   wk:"\u00c9glise_Saint-Sulpice_de_Paris",
-   q_fr:"Quel peintre a d\u00e9cor\u00e9 la chapelle des Saints-Anges de Saint-Sulpice ?",q_en:"Which painter decorated the Chapel of Holy Angels at Saint-Sulpice?",ans:"Delacroix",opts:["Ingres","David","Delacroix","G\u00e9ricault"]},
-  {id:28,n_fr:"Parc des Princes",n_en:"Parc des Princes",lat:48.8414,lon:2.2531,h:44,cat:"sport",
-   annee:"1972",arch_fr:"Roger Taillibert",arch_en:"Roger Taillibert",
-   style_fr:"Brutalisme moderniste",style_en:"Modernist brutalism",
-   desc_fr:"Stade emblématique du PSG et de l'équipe de France de rugby, reconstruit en 1972 par Roger Taillibert. Sa toiture en béton précontraint est un chef-d'œuvre d'ingénierie.",
-   desc_en:"Iconic stadium of PSG and the French rugby team, rebuilt in 1972 by Roger Taillibert. Its prestressed concrete roof is an engineering masterpiece.",
-   wk:"Parc_des_Princes",
-   q_fr:"Qui a conçu le Parc des Princes ?",q_en:"Who designed the Parc des Princes?",ans:"Roger Taillibert",opts:["Jean Prouvé","Roger Taillibert","Oscar Niemeyer","Jean Nouvel"]},
-  {id:29,n_fr:"Stade Roland-Garros",n_en:"Roland Garros Stadium",lat:48.8472,lon:2.2494,h:20,cat:"sport",
-   annee:"1928",arch_fr:"Architecture évolutive",arch_en:"Evolving architecture",
-   style_fr:"Stade de tennis",style_en:"Tennis stadium",
-   desc_fr:"Hôte du Grand Chelem de Roland-Garros depuis 1928, ce complexe de 20 courts est célèbre pour sa terre battue ocre. Le court Philippe-Chatrier accueille plus de 15 000 spectateurs.",
-   desc_en:"Home of the Roland Garros Grand Slam since 1928, this complex of 20 courts is famous for its ochre clay. The Philippe-Chatrier court holds over 15,000 spectators.",
-   wk:"Stade_Roland-Garros",
-   q_fr:"Sur quelle surface se joue Roland-Garros ?",q_en:"On what surface is Roland Garros played?",ans:"Terre battue",opts:["Gazon","Dur","Terre battue","Moquette"]},
-  {id:30,n_fr:"Accor Arena (Bercy)",n_en:"Accor Arena (Bercy)",lat:48.8383,lon:2.3784,h:35,cat:"culture",
-   annee:"1984",arch_fr:"Michel Andrault, Pierre Parat",arch_en:"Michel Andrault, Pierre Parat",
-   style_fr:"Architecture high-tech",style_en:"High-tech architecture",
-   desc_fr:"Inaugurée en 1984, l'Accor Arena est la plus grande salle de spectacle de France avec 20 000 places. Sa façade en pelouse inclinée est devenue un symbole du 12e arrondissement.",
-   desc_en:"Opened in 1984, the Accor Arena is the largest concert hall in France with 20,000 seats. Its sloping grass facade has become a symbol of the 12th arrondissement.",
-   wk:"Palais omnisports de Paris-Bercy",
-   q_fr:"Quelle est la capacité de l'Accor Arena ?",q_en:"What is the capacity of the Accor Arena?",ans:"20 000 places",opts:["10 000 places","15 000 places","20 000 places","25 000 places"]},
-  {id:31,n_fr:"La Seine Musicale",n_en:"La Seine Musicale",lat:48.8317,lon:2.2300,h:40,cat:"culture",
-   annee:"2017",arch_fr:"Shigeru Ban, Jean de Gastines",arch_en:"Shigeru Ban, Jean de Gastines",
-   style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
-   desc_fr:"Inaugurée en 2017 sur l'île Seguin à Boulogne-Billancourt, La Seine Musicale est coiffée d'une voile solaire mobile. Conçue par Shigeru Ban, elle accueille concerts, opéras et expositions.",
-   desc_en:"Opened in 2017 on the Île Seguin in Boulogne-Billancourt, La Seine Musicale is topped by a moving solar sail. Designed by Shigeru Ban, it hosts concerts, operas and exhibitions.",
-   wk:"La Seine musicale",
-   q_fr:"Sur quelle île est construite La Seine Musicale ?",q_en:"On which island is La Seine Musicale built?",ans:"Île Seguin",opts:["Île de la Cité","Île Saint-Louis","Île Seguin","Île des Impressionnistes"]},
-];
+    const MONUMENTS=[
+      {id:1,n_fr:"Tour Eiffel",n_en:"Eiffel Tower",lat:48.8584,lon:2.2945,h:330,cat:"tower",
+       annee:"1889",arch_fr:"Gustave Eiffel",arch_en:"Gustave Eiffel",
+       style_fr:"Fer forgé éclectique",style_en:"Wrought iron eclectic",
+       desc_fr:"Construite pour l'Exposition universelle de 1889, la Tour Eiffel fut d'abord décriée par les artistes parisiens avant de devenir le symbole de Paris et de la France.",
+       desc_en:"Built for the 1889 World's Fair, the Eiffel Tower was initially criticized by Parisian artists before becoming the symbol of Paris and France.",
+       wk:"Tour_Eiffel",
+       q_fr:"De quelle année date la Tour Eiffel ?",q_en:"When was the Eiffel Tower built?",ans:"1889",opts:["1855","1867","1889","1900"]},
+      {id:2,n_fr:"Arc de Triomphe",n_en:"Arc de Triomphe",lat:48.8738,lon:2.2950,h:50,cat:"arch",
+       annee:"1836",arch_fr:"Jean Chalgrin",arch_en:"Jean Chalgrin",
+       style_fr:"Néoclassique",style_en:"Neoclassical",
+       desc_fr:"Commandé par Napoléon en 1806 pour célébrer ses victoires, l'Arc de Triomphe abrite la tombe du Soldat Inconnu depuis 1920.",
+       desc_en:"Commissioned by Napoleon in 1806 to celebrate his victories, the Arc de Triomphe has housed the Tomb of the Unknown Soldier since 1920.",
+       wk:"Arc_de_triomphe_de_l'Étoile",
+       q_fr:"Qui a commandé l'Arc de Triomphe ?",q_en:"Who ordered the Arc de Triomphe?",ans:"Napoléon",opts:["Louis XIV","Napoléon","Victor Hugo","Haussmann"]},
+      {id:3,n_fr:"Cathédrale Notre-Dame",n_en:"Notre-Dame Cathedral",lat:48.8530,lon:2.3499,h:69,cat:"church",
+       annee:"1345",arch_fr:"Jean de Chelles, Pierre de Montreuil",arch_en:"Jean de Chelles, Pierre de Montreuil",
+       style_fr:"Gothique",style_en:"Gothic",
+       desc_fr:"Chef-d'œuvre du gothique parisien, Notre-Dame fut gravement endommagée par l'incendie d'avril 2019 et a rouvert ses portes en décembre 2024 après une restauration exceptionnelle.",
+       desc_en:"Masterpiece of Parisian Gothic, Notre-Dame was severely damaged by the April 2019 fire and reopened in December 2024 after an exceptional restoration.",
+       wk:"Cathédrale_Notre-Dame_de_Paris",
+       q_fr:"Quelle est la hauteur des tours de Notre-Dame ?",q_en:"Height of Notre-Dame towers?",ans:"69 m",opts:["45 m","55 m","69 m","80 m"]},
+      {id:4,n_fr:"Basilique du Sacré-Cœur",n_en:"Sacré-Cœur Basilica",lat:48.8867,lon:2.3431,h:108,cat:"church",
+       annee:"1914",arch_fr:"Paul Abadie",arch_en:"Paul Abadie",
+       style_fr:"Romano-byzantin",style_en:"Romano-Byzantine",
+       desc_fr:"Érigée au sommet de la butte Montmartre en hommage aux victimes de la guerre de 1870, la basilique offre un panorama exceptionnel sur Paris.",
+       desc_en:"Erected on top of the Montmartre hill as a tribute to the victims of the 1870 war, the basilica offers an exceptional panorama of Paris.",
+       wk:"Basilique_du_Sacré-Cœur_de_Montmartre",
+       q_fr:"Sur quelle butte se trouve le Sacré-Cœur ?",q_en:"On which hill is Sacré-Cœur?",ans:"Montmartre",opts:["Belleville","Chaillot","Montmartre","Montrouge"]},
+      {id:5,n_fr:"Tour Montparnasse",n_en:"Montparnasse Tower",lat:48.8422,lon:2.3218,h:210,cat:"tower",
+       annee:"1973",arch_fr:"Beaudouin, Cassan, de Marien, Saubot",arch_en:"Beaudouin, Cassan, de Marien, Saubot",
+       style_fr:"Modernisme international",style_en:"International modernism",
+       desc_fr:"Longtemps controversée pour son impact sur le paysage parisien, la Tour Montparnasse est en cours de rénovation pour afficher une nouvelle façade végétalisée.",
+       desc_en:"Long controversial for its impact on the Parisian landscape, Montparnasse Tower is being renovated to display a new green facade.",
+       wk:"Tour_Montparnasse",
+       q_fr:"Combien d'étages a la Tour Montparnasse ?",q_en:"How many floors?",ans:"59",opts:["45","52","59","67"]},
+      {id:6,n_fr:"Panthéon",n_en:"Panthéon",lat:48.8462,lon:2.3462,h:83,cat:"dome",
+       annee:"1790",arch_fr:"Jacques-Germain Soufflot",arch_en:"Jacques-Germain Soufflot",
+       style_fr:"Néoclassique",style_en:"Neoclassical",
+       desc_fr:"Initialement conçu comme église Sainte-Geneviève, le Panthéon est devenu le mausolée des grandes figures de la République française.",
+       desc_en:"Initially designed as the church of Sainte-Geneviève, the Panthéon became the mausoleum of great figures of the French Republic.",
+       wk:"Panthéon_(Paris)",
+       q_fr:"Qui est enterré au Panthéon ?",q_en:"Who is buried at the Panthéon?",ans:"Voltaire",opts:["Napoléon","Voltaire","Molière","Balzac"]},
+      {id:7,n_fr:"Opéra Garnier",n_en:"Palais Garnier",lat:48.8720,lon:2.3316,h:74,cat:"culture",
+       annee:"1875",arch_fr:"Charles Garnier",arch_en:"Charles Garnier",
+       style_fr:"Éclectisme Second Empire",style_en:"Second Empire eclecticism",
+       desc_fr:"Symbole du faste du Second Empire, l'Opéra Garnier fut le plus grand opéra du monde à son inauguration. Son escalier monumental et son grand lustre sont célèbres dans le monde entier.",
+       desc_en:"Symbol of the grandeur of the Second Empire, the Palais Garnier was the world's largest opera house at its inauguration.",
+       wk:"Opéra Garnier",
+       q_fr:"Qui a conçu l'Opéra Garnier ?",q_en:"Who designed the Palais Garnier?",ans:"Charles Garnier",opts:["Haussmann","Charles Garnier","Eiffel","Viollet-le-Duc"]},
+      {id:8,n_fr:"Musée du Louvre",n_en:"Louvre Museum",lat:48.8606,lon:2.3376,h:21,cat:"museum",
+       annee:"1793",arch_fr:"Pierre Lescot (palais), I. M. Pei (pyramide)",arch_en:"Pierre Lescot (palace), I. M. Pei (pyramid)",
+       style_fr:"Renaissance, moderne",style_en:"Renaissance, modern",
+       desc_fr:"Ancien palais royal devenu le plus grand musée du monde, le Louvre accueille plus de 9 millions de visiteurs par an. La pyramide de verre de Pei a été inaugurée en 1989.",
+       desc_en:"A former royal palace turned the world's largest museum, the Louvre welcomes over 9 million visitors a year.",
+       wk:"Musée_du_Louvre",
+       q_fr:"Quelle est la forme de la pyramide du Louvre ?",q_en:"Shape of the Louvre pyramid?",ans:"Triangle",opts:["Carré","Triangle","Hexagone","Octogone"]},
+      {id:9,n_fr:"Centre Pompidou",n_en:"Pompidou Center",lat:48.8607,lon:2.3522,h:42,cat:"culture",
+       annee:"1977",arch_fr:"Renzo Piano, Richard Rogers",arch_en:"Renzo Piano, Richard Rogers",
+       style_fr:"High-tech / Inside-out",style_en:"High-tech / Inside-out",
+       desc_fr:"Révolutionnaire à son ouverture, le Centre Pompidou expose ses structures et conduits techniques à l'extérieur, codés en couleurs selon leur fonction.",
+       desc_en:"Revolutionary at its opening, the Pompidou Centre exposes its structural and technical ducts on the outside, color-coded by function.",
+       wk:"Centre national d'art et de culture Georges-Pompidou",
+       q_fr:"En quelle année a ouvert le Centre Pompidou ?",q_en:"When did Centre Pompidou open?",ans:"1977",opts:["1968","1972","1977","1983"]},
+      {id:10,n_fr:"Colonne Vendôme",n_en:"Vendôme Column",lat:48.8676,lon:2.3296,h:44,cat:"arch",
+       annee:"1810",arch_fr:"Jacques Gondouin, Jean-Baptiste Lepère",arch_en:"Jacques Gondouin, Jean-Baptiste Lepère",
+       style_fr:"Néoclassique impérial",style_en:"Imperial neoclassical",
+       desc_fr:"Érigée par Napoléon, la Colonne Vendôme est recouverte d'une spirale en bronze fondu à partir de 1250 canons pris à Austerlitz.",
+       desc_en:"Erected by Napoleon, the Vendôme Column is covered with a spiral in bronze cast from 1,250 cannons captured at Austerlitz.",
+       wk:"Colonne_Vendôme",
+       q_fr:"Qui figure au sommet de la Colonne Vendôme ?",q_en:"Who is on top?",ans:"Napoléon",opts:["Louis XIV","Napoléon","Mars","Marianne"]},
+      {id:11,n_fr:"Sainte-Chapelle",n_en:"Sainte-Chapelle",lat:48.8554,lon:2.3450,h:75,cat:"church",
+       annee:"1248",arch_fr:"Thomas de Cormont (attribué)",arch_en:"Thomas de Cormont (attributed)",
+       style_fr:"Gothique rayonnant",style_en:"Rayonnant Gothic",
+       desc_fr:"Joyau du gothique rayonnant, la Sainte-Chapelle fut construite par Louis IX pour abriter la Couronne d'épines du Christ. Ses 15 vitraux représentent 1113 scènes bibliques.",
+       desc_en:"A jewel of Rayonnant Gothic, the Sainte-Chapelle was built by Louis IX to house the Crown of Thorns. Its 15 stained glass windows depict 1,113 biblical scenes.",
+       wk:"Sainte-Chapelle",
+       q_fr:"Pourquoi Louis IX fit-il construire la Sainte-Chapelle ?",q_en:"Why was Sainte-Chapelle built?",ans:"Pour les reliques",opts:["Pour couronner les rois","Pour les reliques","Pour les prières royales","Pour le Parlement"]},
+      {id:12,n_fr:"Hôtel des Invalides",n_en:"Les Invalides",lat:48.8566,lon:2.3131,h:107,cat:"dome",
+       annee:"1708",arch_fr:"Jules Hardouin-Mansart (dôme)",arch_en:"Jules Hardouin-Mansart (dome)",
+       style_fr:"Baroque classique français",style_en:"French classical baroque",
+       desc_fr:"Construit par Louis XIV pour loger les soldats invalides, le complexe abrite aujourd'hui le tombeau de Napoléon Bonaparte sous son célèbre dôme doré.",
+       desc_en:"Built by Louis XIV to house invalid soldiers, the complex now houses Napoleon Bonaparte's tomb under its famous gilded dome.",
+       wk:"Hôtel des Invalides",
+       q_fr:"Qui est enterré sous le dôme des Invalides ?",q_en:"Who is buried under the dome?",ans:"Napoléon",opts:["Vauban","Napoléon","Foch","De Gaulle"]},
+      {id:13,n_fr:"Palais Royal",n_en:"Palais Royal",lat:48.8638,lon:2.3370,h:20,cat:"palace",
+       annee:"1639",arch_fr:"Jacques Lemercier",arch_en:"Jacques Lemercier",
+       style_fr:"Baroque",style_en:"Baroque",
+       desc_fr:"Résidence du cardinal de Richelieu puis résidence royale, le Palais Royal abrite aujourd'hui le Conseil d'État. Ses colonnes de Buren dans la cour d'honneur sont une œuvre d'art contemporaine.",
+       desc_en:"Residence of Cardinal Richelieu then a royal residence, the Palais Royal now houses the Council of State. Buren's columns in the courtyard are a contemporary artwork.",
+       wk:"Palais-Royal",
+       q_fr:"Pour qui le Palais Royal fut-il construit ?",q_en:"For whom was the Palais Royal built?",ans:"Richelieu",opts:["Henri IV","Louis XIV","Richelieu","Mazarin"]},
+      {id:14,n_fr:"Château de Vincennes",n_en:"Château de Vincennes",lat:48.8484,lon:2.4339,h:52,cat:"castle",
+       annee:"1369",arch_fr:"Raymond du Temple",arch_en:"Raymond du Temple",
+       style_fr:"Gothique médiéval",style_en:"Medieval Gothic",
+       desc_fr:"Résidence royale favorite des Valois, le château de Vincennes possède le plus grand donjon médiéval d'Europe, dominant la forêt de Vincennes à l'est de Paris.",
+       desc_en:"Favorite royal residence of the Valois, Vincennes Castle has the largest medieval keep in Europe, overlooking the Vincennes forest east of Paris.",
+       wk:"Château_de_Vincennes",
+       q_fr:"Qu'est-ce que le Château de Vincennes à l'origine ?",q_en:"What was Vincennes originally?",ans:"Résidence royale",opts:["Prison militaire","Résidence royale","Cathédrale","Hôpital"]},
+      {id:15,n_fr:"Tour Saint-Jacques",n_en:"Tour Saint-Jacques",lat:48.8573,lon:2.3487,h:54,cat:"tower",
+       annee:"1523",arch_fr:"Jean de Félin (attribué)",arch_en:"Jean de Félin (attributed)",
+       style_fr:"Gothique flamboyant",style_en:"Flamboyant Gothic",
+       desc_fr:"Seul vestige de l'église Saint-Jacques-de-la-Boucherie détruite à la Révolution, cette tour fut utilisée par Pascal pour ses expériences sur la pression atmosphérique.",
+       desc_en:"The only remnant of the church of Saint-Jacques-de-la-Boucherie demolished during the Revolution, this tower was used by Pascal for his atmospheric pressure experiments.",
+       wk:"Tour_Saint-Jacques",
+       q_fr:"Que reste-t-il de l'église Saint-Jacques ?",q_en:"What remains of Saint-Jacques church?",ans:"Sa tour",opts:["La nef","Le chœur","Sa tour","La façade"]},
+      {id:16,n_fr:"Institut de France",n_en:"Institut de France",lat:48.8558,lon:2.3374,h:36,cat:"dome",
+       annee:"1688",arch_fr:"Louis Le Vau",arch_en:"Louis Le Vau",
+       style_fr:"Baroque classique",style_en:"Classical baroque",
+       desc_fr:"Regroupant cinq académies dont l'Académie française, l'Institut de France fut fondé par Mazarin comme collège des Quatre-Nations pour former les jeunes de provinces conquises.",
+       desc_en:"Grouping five academies including the Académie française, the Institut de France was founded by Mazarin as the Collège des Quatre-Nations.",
+       wk:"Institut de France",
+       q_fr:"Combien d'académies compose l'Institut de France ?",q_en:"How many academies?",ans:"5",opts:["3","4","5","7"]},
+      {id:17,n_fr:"Hôtel de Ville de Paris",n_en:"Paris City Hall",lat:48.8564,lon:2.3523,h:50,cat:"palace",
+       annee:"1882",arch_fr:"Théodore Ballu, Édouard Deperthes",arch_en:"Théodore Ballu, Édouard Deperthes",
+       style_fr:"Renaissance française",style_en:"French Renaissance",
+       desc_fr:"Reconstruit après l'incendie de la Commune en 1871, l'Hôtel de Ville actuel est une réplique enrichie de l'édifice du XVIe siècle. Il est le siège de la mairie de Paris.",
+       desc_en:"Rebuilt after the Commune fire in 1871, the current City Hall is an enriched replica of the 16th century building.",
+       wk:"Hôtel_de_ville_de_Paris",
+       q_fr:"Que s'est-il passé à l'Hôtel de Ville en 1871 ?",q_en:"What happened in 1871?",ans:"Il a brûlé",opts:["Il a été construit","Il a brûlé","Il est devenu musée","Il a été bombardé"]},
+      {id:18,n_fr:"Grande Arche de La Défense",n_en:"La Grande Arche",lat:48.8924,lon:2.2358,h:110,cat:"arch",
+       annee:"1989",arch_fr:"Johan Otto von Spreckelsen",arch_en:"Johan Otto von Spreckelsen",
+       style_fr:"Déconstructivisme",style_en:"Deconstructivism",
+       desc_fr:"Inaugurée le jour du bicentenaire de la Révolution française, la Grande Arche de La Défense est un cube creux de 110 m de côté, dans lequel la cathédrale Notre-Dame pourrait tenir.",
+       desc_en:"Inaugurated on the bicentenary of the French Revolution, La Grande Arche is a hollow cube of 110m per side, large enough to contain Notre-Dame Cathedral.",
+       wk:"Arche de la Défense",
+       q_fr:"En quelle année a été inaugurée la Grande Arche ?",q_en:"When was La Grande Arche inaugurated?",ans:"1989",opts:["1968","1981","1989","1995"]},
+      {id:19,n_fr:"BNF François-Mitterrand",n_en:"National Library of France",lat:48.8354,lon:2.3477,h:79,cat:"culture",
+       annee:"1996",arch_fr:"Dominique Perrault",arch_en:"Dominique Perrault",
+       style_fr:"Modernisme minimaliste",style_en:"Minimalist modernism",
+       desc_fr:"Les quatre tours en forme de livres ouverts symbolisent l'ouverture du savoir. La bibliothèque conserve plus de 14 millions de documents et 40 km de rayonnages.",
+       desc_en:"The four towers shaped like open books symbolize the opening of knowledge. The library holds over 14 million documents and 40km of shelving.",
+       wk:"Bibliothèque_nationale_de_France",
+       q_fr:"Quelle est la forme des tours de la BNF ?",q_en:"Shape of the BNF towers?",ans:"Livres ouverts",opts:["Cylindres","Pyramides","Livres ouverts","Croix"]},
+      {id:20,n_fr:"Obélisque de la Concorde",n_en:"Obelisk of Concorde",lat:48.8654,lon:2.3212,h:23,cat:"arch",
+       annee:"1836",arch_fr:"Égypte antique (Ramsès II)",arch_en:"Ancient Egypt (Ramesses II)",
+       style_fr:"Égyptien antique",style_en:"Ancient Egyptian",
+       desc_fr:"Offert par Méhémet Ali à la France, cet obélisque de Louxor date de 3200 ans. Il fut dressé place de la Concorde en 1836, à l'emplacement même de la guillotine révolutionnaire.",
+       desc_en:"Offered by Mehmet Ali to France, this Luxor obelisk is 3,200 years old. It was erected in 1836 at the very spot where the revolutionary guillotine stood.",
+       wk:"Obélisque de Louxor",
+       q_fr:"D'où vient l'Obélisque de la Concorde ?",q_en:"Where does it come from?",ans:"Louxor, Égypte",opts:["Grèce","Rome","Louxor, Égypte","Babylone"]},
+      {id:21,n_fr:"Moulin Rouge",n_en:"Moulin Rouge",lat:48.8842,lon:2.3324,h:15,cat:"culture",
+       annee:"1889",arch_fr:"Édouard Zidler, Joseph Oller",arch_en:"Édouard Zidler, Joseph Oller",
+       style_fr:"Belle Époque",style_en:"Belle Époque",
+       desc_fr:"Symbole de la vie nocturne parisienne, le Moulin Rouge est célèbre pour avoir popularisé le french cancan. Toulouse-Lautrec en a immortalisé l'ambiance dans ses affiches.",
+       desc_en:"Symbol of Parisian nightlife, the Moulin Rouge is famous for popularizing the French cancan. Toulouse-Lautrec immortalized its atmosphere in his posters.",
+       wk:"Moulin-Rouge",
+       q_fr:"En quelle année a ouvert le Moulin Rouge ?",q_en:"When did Moulin Rouge open?",ans:"1889",opts:["1875","1889","1900","1912"]},
+      {id:22,n_fr:"Palais de Chaillot",n_en:"Palais de Chaillot",lat:48.8616,lon:2.2870,h:65,cat:"palace",
+       annee:"1937",arch_fr:"Carlu, Boileau, Azéma",arch_en:"Carlu, Boileau, Azéma",
+       style_fr:"Art déco monumental",style_en:"Monumental Art Deco",
+       desc_fr:"Construit pour l'Exposition universelle de 1937, le Palais de Chaillot offre la plus belle vue frontale sur la Tour Eiffel. Il abrite plusieurs musées dont le musée de la Marine.",
+       desc_en:"Built for the 1937 World's Fair, the Palais de Chaillot offers the finest frontal view of the Eiffel Tower. It houses several museums including the Naval Museum.",
+       wk:"Palais_de_Chaillot",
+       q_fr:"Pour quelle exposition a été construit le Palais de Chaillot ?",q_en:"For which expo was it built?",ans:"1937",opts:["1900","1920","1937","1951"]},
+      {id:23,n_fr:"Tour First (La Défense)",n_en:"Tour First (La Défense)",lat:48.8927,lon:2.2378,h:231,cat:"tower",
+       annee:"1974",arch_fr:"Skidmore, Owings & Merrill (rénovation 2011)",arch_en:"Skidmore, Owings & Merrill (2011 renovation)",
+       style_fr:"Modernisme",style_en:"Modernism",
+       desc_fr:"Tour la plus haute de France et d'Europe occidentale lors de sa rénovation en 2011, la Tour First culmine à 231 m et accueille le siège de BNP Paribas.",
+       desc_en:"The tallest tower in France and Western Europe when renovated in 2011, Tour First stands 231m tall and houses BNP Paribas headquarters.",
+       wk:"Tour_First",
+       q_fr:"Quelle est la tour la plus haute de La Défense ?",q_en:"What is the tallest tower at La Défense?",ans:"Tour First",opts:["Tour Total","Tour First","Tour Majunga","Tour Hekla"]},
+      {id:24,n_fr:"Tour Total Énergies (Défense)",n_en:"Tour TotalEnergies (La Défense)",lat:48.8921,lon:2.2390,h:187,cat:"tower",
+       annee:"1985",arch_fr:"Roger Saubot, François Jullien",arch_en:"Roger Saubot, François Jullien",
+       style_fr:"Modernisme",style_en:"Modernism",
+       desc_fr:"Siège mondial de TotalEnergies, cette tour de 187 m est l'une des plus reconnaissables du quartier de La Défense avec sa façade entièrement vitrée.",
+       desc_en:"Global headquarters of TotalEnergies, this 187m tower is one of the most recognizable in the La Défense district with its fully glazed facade.",
+       wk:"Tour TotalEnergies (Coupole)",
+       q_fr:"Combien de tours dépassent 150 m à La Défense ?",q_en:"How many towers exceed 150m at La Défense?",ans:"Plus de 15",opts:["5","10","Plus de 15","30"]},
+      {id:25,n_fr:"Tour Hekla (La Défense)",n_en:"Tour Hekla (La Défense)",lat:48.8926,lon:2.2365,h:323,cat:"tower",
+       annee:"2026 (en cours)",arch_fr:"Ateliers Jean Nouvel",arch_en:"Ateliers Jean Nouvel",
+       style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
+       desc_fr:"Projet de tour de 323 m conçu par Jean Nouvel pour La Défense, baptisée Hekla en référence au volcan islandais. Elle serait la plus haute tour de France à sa livraison.",
+       desc_en:"A 323m tower project designed by Jean Nouvel for La Défense, named after the Icelandic volcano Hekla. It would be the tallest tower in France upon completion.",
+       wk:"Tour_Hekla",
+       q_fr:"Quel est le nom de l'architecte de la Tour Hekla ?",q_en:"Who designed Tour Hekla?",ans:"Jean Nouvel",opts:["Foster","Hadid","Jean Nouvel","Piano"]},
+      {id:26,n_fr:"Tour Triangle (15e)",n_en:"Tour Triangle (15th arr.)",lat:48.8397,lon:2.2875,h:180,cat:"tower",
+       annee:"2028 (prévu)",arch_fr:"Herzog & de Meuron",arch_en:"Herzog & de Meuron",
+       style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
+       desc_fr:"Projet de tour triangulaire de 180 m dans le 15e arrondissement, conçu par les architectes suisses Herzog & de Meuron. Sa silhouette en prisme transformera l'horizon sud de Paris.",
+       desc_en:"A 180m triangular tower project in the 15th arrondissement, designed by Swiss architects Herzog & de Meuron. Its prism-shaped silhouette will transform the southern Paris skyline.",
+       wk:"Tour Triangle",
+       q_fr:"Quel est le nom de l'architecte de la Tour Triangle ?",q_en:"Who designed the Tour Triangle?",ans:"Herzog & de Meuron",opts:["Foster","Hadid","Herzog & de Meuron","Piano"]},
+      {id:27,n_fr:"\u00c9glise Saint-Sulpice",n_en:"Saint-Sulpice Church",lat:48.8508,lon:2.3349,h:73,cat:"church",
+       annee:"1745",arch_fr:"Giovanni Servandoni",arch_en:"Giovanni Servandoni",
+       style_fr:"Baroque / N\u00e9oclassique",style_en:"Baroque / Neoclassical",
+       desc_fr:"Deuxi\u00e8me plus grande \u00e9glise de Paris apr\u00e8s Notre-Dame, Saint-Sulpice est c\u00e9l\u00e8bre pour son orgue monumental, ses fresques de Delacroix et son gnomon au sol rendu c\u00e9l\u00e8bre par le Da Vinci Code.",
+       desc_en:"The second largest church in Paris after Notre-Dame, Saint-Sulpice is famous for its monumental organ, Delacroix frescoes, and its floor gnomon made famous by The Da Vinci Code.",
+       wk:"\u00c9glise_Saint-Sulpice_de_Paris",
+       q_fr:"Quel peintre a d\u00e9cor\u00e9 la chapelle des Saints-Anges de Saint-Sulpice ?",q_en:"Which painter decorated the Chapel of Holy Angels at Saint-Sulpice?",ans:"Delacroix",opts:["Ingres","David","Delacroix","G\u00e9ricault"]},
+      {id:28,n_fr:"Parc des Princes",n_en:"Parc des Princes",lat:48.8414,lon:2.2531,h:44,cat:"sport",
+       annee:"1972",arch_fr:"Roger Taillibert",arch_en:"Roger Taillibert",
+       style_fr:"Brutalisme moderniste",style_en:"Modernist brutalism",
+       desc_fr:"Stade emblématique du PSG et de l'équipe de France de rugby, reconstruit en 1972 par Roger Taillibert. Sa toiture en béton précontraint est un chef-d'œuvre d'ingénierie.",
+       desc_en:"Iconic stadium of PSG and the French rugby team, rebuilt in 1972 by Roger Taillibert. Its prestressed concrete roof is an engineering masterpiece.",
+       wk:"Parc_des_Princes",
+       q_fr:"Qui a conçu le Parc des Princes ?",q_en:"Who designed the Parc des Princes?",ans:"Roger Taillibert",opts:["Jean Prouvé","Roger Taillibert","Oscar Niemeyer","Jean Nouvel"]},
+      {id:29,n_fr:"Stade Roland-Garros",n_en:"Roland Garros Stadium",lat:48.8472,lon:2.2494,h:20,cat:"sport",
+       annee:"1928",arch_fr:"Architecture évolutive",arch_en:"Evolving architecture",
+       style_fr:"Stade de tennis",style_en:"Tennis stadium",
+       desc_fr:"Hôte du Grand Chelem de Roland-Garros depuis 1928, ce complexe de 20 courts est célèbre pour sa terre battue ocre. Le court Philippe-Chatrier accueille plus de 15 000 spectateurs.",
+       desc_en:"Home of the Roland Garros Grand Slam since 1928, this complex of 20 courts is famous for its ochre clay. The Philippe-Chatrier court holds over 15,000 spectators.",
+       wk:"Stade_Roland-Garros",
+       q_fr:"Sur quelle surface se joue Roland-Garros ?",q_en:"On what surface is Roland Garros played?",ans:"Terre battue",opts:["Gazon","Dur","Terre battue","Moquette"]},
+      {id:30,n_fr:"Accor Arena (Bercy)",n_en:"Accor Arena (Bercy)",lat:48.8383,lon:2.3784,h:35,cat:"culture",
+       annee:"1984",arch_fr:"Michel Andrault, Pierre Parat",arch_en:"Michel Andrault, Pierre Parat",
+       style_fr:"Architecture high-tech",style_en:"High-tech architecture",
+       desc_fr:"Inaugurée en 1984, l'Accor Arena est la plus grande salle de spectacle de France avec 20 000 places. Sa façade en pelouse inclinée est devenue un symbole du 12e arrondissement.",
+       desc_en:"Opened in 1984, the Accor Arena is the largest concert hall in France with 20,000 seats. Its sloping grass facade has become a symbol of the 12th arrondissement.",
+       wk:"Palais omnisports de Paris-Bercy",
+       q_fr:"Quelle est la capacité de l'Accor Arena ?",q_en:"What is the capacity of the Accor Arena?",ans:"20 000 places",opts:["10 000 places","15 000 places","20 000 places","25 000 places"]},
+      {id:31,n_fr:"La Seine Musicale",n_en:"La Seine Musicale",lat:48.8317,lon:2.2300,h:40,cat:"culture",
+       annee:"2017",arch_fr:"Shigeru Ban, Jean de Gastines",arch_en:"Shigeru Ban, Jean de Gastines",
+       style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
+       desc_fr:"Inaugurée en 2017 sur l'île Seguin à Boulogne-Billancourt, La Seine Musicale est coiffée d'une voile solaire mobile. Conçue par Shigeru Ban, elle accueille concerts, opéras et expositions.",
+       desc_en:"Opened in 2017 on the Île Seguin in Boulogne-Billancourt, La Seine Musicale is topped by a moving solar sail. Designed by Shigeru Ban, it hosts concerts, operas and exhibitions.",
+       wk:"La Seine musicale",
+       q_fr:"Sur quelle île est construite La Seine Musicale ?",q_en:"On which island is La Seine Musicale built?",ans:"Île Seguin",opts:["Île de la Cité","Île Saint-Louis","Île Seguin","Île des Impressionnistes"]},
+    {id:32,n_fr:"Tribunal de Paris (17e)",n_en:"Paris Courthouse (17th)",lat:48.8985,lon:2.3194,h:160,cat:"palace",
+       annee:"2017",arch_fr:"Renzo Piano",arch_en:"Renzo Piano",
+       style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
+       desc_fr:"Inauguré en 2017 à la Porte de Clichy dans le 17e arrondissement, le nouveau tribunal de Paris conçu par Renzo Piano est une tour de verre et d'acier de 160 m. Il regroupe 90 salles d'audience et 9 000 agents de justice.",
+       desc_en:"Inaugurated in 2017 at Porte de Clichy in the 17th arrondissement, the new Paris courthouse designed by Renzo Piano is a 160m glass and steel tower. It houses 90 courtrooms and 9,000 justice officials.",
+       wk:"Tribunal_de_Paris",
+       q_fr:"Qui a conçu le nouveau Tribunal de Paris dans le 17e ?",q_en:"Who designed the new Paris Courthouse in the 17th?",ans:"Renzo Piano",opts:["Jean Nouvel","Norman Foster","Renzo Piano","Zaha Hadid"]},
+      {id:33,n_fr:"Place de la Bastille",n_en:"Place de la Bastille",lat:48.8533,lon:2.3692,h:52,cat:"arch",
+       annee:"1840",arch_fr:"Joseph-Louis Duc (colonne)",arch_en:"Joseph-Louis Duc (column)",
+       style_fr:"Néoclassique",style_en:"Neoclassical",
+       desc_fr:"Symbole de la Révolution française, la place de la Bastille marque l'emplacement de la forteresse détruite en 1789. La Colonne de Juillet (52 m) commémore les révolutions de 1830. L'Opéra Bastille s'y dresse depuis 1989.",
+       desc_en:"Symbol of the French Revolution, the Place de la Bastille marks the site of the fortress destroyed in 1789. The July Column (52m) commemorates the 1830 revolutions. The Opéra Bastille has stood there since 1989.",
+       wk:"Place_de_la_Bastille",
+       q_fr:"Que commémore la Colonne de Juillet place de la Bastille ?",q_en:"What does the July Column commemorate?",ans:"La révolution de 1830",opts:["La prise de la Bastille","La révolution de 1830","La Commune","L'Empire"]},
+      {id:34,n_fr:"Tours Duo (Jean Nouvel)",n_en:"Duo Towers (Jean Nouvel)",lat:48.8307,lon:2.3657,h:180,cat:"tower",
+       annee:"2022",arch_fr:"Jean Nouvel",arch_en:"Jean Nouvel",
+       style_fr:"Architecture contemporaine",style_en:"Contemporary architecture",
+       desc_fr:"Les deux tours Duo, de 180 et 122 m, signées Jean Nouvel, forment un ensemble incliné l'une vers l'autre dans le 13e arrondissement. Leurs façades asymétriques reflètent la Seine et transforment le skyline sud de Paris.",
+       desc_en:"The two Duo towers, 180m and 122m, designed by Jean Nouvel, lean towards each other in the 13th arrondissement. Their asymmetric facades reflect the Seine and transform the southern Paris skyline.",
+       wk:"Tours_Duo",
+       q_fr:"Dans quel arrondissement se trouvent les Tours Duo de Jean Nouvel ?",q_en:"In which arrondissement are Jean Nouvel's Duo Towers?",ans:"13e",opts:["12e","13e","14e","15e"]},
+      {id:35,n_fr:"Place de la Nation",n_en:"Place de la Nation",lat:48.8484,lon:2.3961,h:20,cat:"arch",
+       annee:"1899",arch_fr:"Aimé-Jules Dalou (sculpture)",arch_en:"Aimé-Jules Dalou (sculpture)",
+       style_fr:"République classique",style_en:"Classical republic",
+       desc_fr:"L'une des plus grandes places de Paris, la Nation est dominée par le groupe sculpté du Triomphe de la République de Dalou. Carrefour historique du faubourg Saint-Antoine, elle fut longtemps appelée place du Trône.",
+       desc_en:"One of Paris's largest squares, the Nation is dominated by Dalou's sculptural group Triumph of the Republic. A historic crossroads of the faubourg Saint-Antoine, it was long called Place du Trône.",
+       wk:"Place_de_la_Nation",
+       q_fr:"Comment s'appelait la Place de la Nation avant la Révolution ?",q_en:"What was Place de la Nation called before the Revolution?",ans:"Place du Trône",opts:["Place Royale","Place du Trône","Place de la République","Place d'Italie"]},
+    ];
 
 const CAT_COLOR={tower:"#378ADD",arch:"#BA7517",church:"#1D9E75",dome:"#7F77DD",museum:"#D85A30",culture:"#D4537E",palace:"#888780",castle:"#639922",sport:"#3DAA6E"};
 const CAT_FR={tower:"Tour",arch:"Arc/Colonne",church:"Église",dome:"Dôme",museum:"Musée",culture:"Culture",palace:"Palais",castle:"Château",sport:"Sport"};
@@ -518,14 +573,18 @@ const TXT={
     th_nom:"Monument",th_az:"Az.",th_dir:"Dir.",th_dist:"Distance",th_elev:"Élév.",
     no_pos:"Définissez d'abord une position dans l'onglet 📍",
     tab_pos:"📍 Position",tab_pan:"🔭 Panorama",tab_quiz:"🎯 Quiz",
-    geo_searching:"Recherche en cours...",geo_ok:"Position trouvée !",geo_err:"Adresse introuvable",
+    geo_searching:"Recherche en cours...",geo_err:"Adresse introuvable",
     gps_ok:"Position GPS obtenue !",gps_err:"GPS indisponible",gps_wait:"Localisation...",
-    manual_err:"Coordonnées invalides",
+    addr_required:"⚠ Entrez une adresse",manual_err:"Coordonnées invalides",
     src_geo:"Géocodage (Nominatim)",src_gps:"GPS iPhone",src_manual:"Manuel",
     pano_hint:"Pinch pour zoomer · Glisser pour naviguer · Tap monument pour fiche",
     dl_hauteur:"Hauteur",dl_date:"Construction",dl_arch:"Architecte",dl_style:"Style",dl_dist:"Distance",dl_az:"Azimut",
     quiz_info:"Répondez aux questions sur les monuments parisiens",
-    btn_next:"Question suivante →",l_hist:"Adresses mémorisées",
+    btn_next:"Question suivante →",btn_newgame:"🎲 Nouvelle partie",
+    search_ph:"Rechercher un monument…",search_none:"Aucun résultat",
+    l_hist:"Adresses mémorisées",
+    t_textsize:"Taille du texte",t_posinfo:"Position actuelle",t_appinfo:"Application",
+    geo_ok:"✓ Position trouvée !",
   },
   en:{h_title:"Paris Panorama",h_sub:"PANORAMIC TABLE OF MONUMENTS",
     t_addr:"Search by address",l_addr:"Address",l_city:"City",
@@ -537,14 +596,18 @@ const TXT={
     th_nom:"Monument",th_az:"Az.",th_dir:"Dir.",th_dist:"Distance",th_elev:"Elev.",
     no_pos:"Set a position first in the 📍 tab",
     tab_pos:"📍 Position",tab_pan:"🔭 Panorama",tab_quiz:"🎯 Quiz",
-    geo_searching:"Searching...",geo_ok:"Location found!",geo_err:"Address not found",
+    geo_searching:"Searching...",geo_err:"Address not found",
     gps_ok:"GPS position obtained!",gps_err:"GPS unavailable",gps_wait:"Locating...",
-    manual_err:"Invalid coordinates",
+    addr_required:"⚠ Enter an address",manual_err:"Invalid coordinates",
     src_geo:"Geocoding (Nominatim)",src_gps:"iPhone GPS",src_manual:"Manual",
     pano_hint:"Pinch to zoom · Drag to navigate · Tap monument for details",
     dl_hauteur:"Height",dl_date:"Built",dl_arch:"Architect",dl_style:"Style",dl_dist:"Distance",dl_az:"Bearing",
     quiz_info:"Answer questions about Parisian monuments",
-    btn_next:"Next question →",l_hist:"Saved addresses",
+    btn_next:"Next question →",btn_newgame:"🎲 New game",
+    search_ph:"Search a monument…",search_none:"No results",
+    l_hist:"Saved addresses",
+    t_textsize:"Text size",t_posinfo:"Current position",t_appinfo:"Application",
+    geo_ok:"✓ Location found!",
   }
 };
 function t(k){return TXT[state.lang][k]||k}
@@ -571,7 +634,11 @@ function applyLang(){
     ['pano-hint','pano_hint'],['l-hist','l_hist'],
     ['dl-hauteur','dl_hauteur'],['dl-date','dl_date'],['dl-arch','dl_arch'],
     ['dl-style','dl_style'],['dl-dist','dl_dist'],['dl-az','dl_az'],
+    ['btn-newgame','btn_newgame'],['t-textsize','t_textsize'],
+    ['t-posinfo','t_posinfo'],
   ];
+  const si=document.getElementById('mon-search');
+  if(si) si.placeholder=t('search_ph');
   ids.forEach(([id,key])=>{const el=document.getElementById(id);if(el)el.textContent=t(key)});
 }
 
@@ -600,7 +667,7 @@ function showTab(tab){
 async function geocodeAddress(){
   const addr=document.getElementById('inp-addr').value.trim();
   const city=document.getElementById('inp-city').value.trim();
-  if(!addr){setStatus('status-geo','⚠ Entrez une adresse','err');return;}
+  if(!addr){setStatus('status-geo',t('addr_required'),'err');return;}
   setStatus('status-geo',t('geo_searching'),'');
   const q=encodeURIComponent(addr+(city?', '+city:''));
   const url='https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=1&addressdetails=0';
@@ -919,6 +986,26 @@ async function openDetail(id){
   document.getElementById('dv-az').textContent=m.az?Math.round(m.az)+'° '+dirCard(m.az):'—';
   document.getElementById('detail-desc').textContent=desc||'';
 
+  /* Boutons navigation */
+  const appleMapsUrl='maps://?daddr='+m.lat+','+m.lon+'&dirflg=d';
+  const googleMapsUrl='https://www.google.com/maps/dir/?api=1&destination='+m.lat+','+m.lon+'&travelmode=transit';
+  const btnApple=document.getElementById('btn-maps-apple');
+  const btnGoogle=document.getElementById('btn-maps-google');
+  if(btnApple){
+    btnApple.onclick=()=>{
+      try{ window.open(appleMapsUrl,'_system'); }
+      catch(e){ window.location.href=appleMapsUrl; }
+      return false;
+    };
+  }
+  if(btnGoogle){
+    btnGoogle.onclick=()=>{
+      try{ window.open(googleMapsUrl,'_system'); }
+      catch(e){ window.open(googleMapsUrl,'_blank'); }
+      return false;
+    };
+  }
+
   // Afficher la modale plein écran
   const overlay=document.getElementById('detail-overlay');
   overlay.style.display='flex';
@@ -1140,7 +1227,85 @@ function drawPanorama(){
   renderPano(); drawTable(); drawLegend();
 }
 
+/* ── Recherche monuments ── */
+/* Enlève les accents pour la comparaison */
+function normalize(s){
+  return s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+}
+
+function filterMonuments(){
+  const raw=document.getElementById('mon-search').value||'';
+  const q=normalize(raw).trim();
+  const btn=document.getElementById('search-clear');
+  if(btn) btn.style.display=raw?'flex':'none';
+  const filtered=q
+    ? pano.results.filter(m=>{
+        const nm=normalize(state.lang==='fr'?m.n_fr:m.n_en);
+        return nm.includes(q);
+      })
+    : pano.results;
+  renderTableRows(filtered, raw.trim());
+  if(filtered.length===1){
+    pano.offsetX=azToVX(filtered[0].az); clampOffset(); renderPano();
+  }
+}
+
+function clearSearch(){
+  const inp=document.getElementById('mon-search');
+  if(inp){ inp.value=''; inp.focus(); }
+  const btn=document.getElementById('search-clear');
+  if(btn) btn.style.display='none';
+  renderTableRows(pano.results, '');
+}
+
+function renderTableRows(list, q){
+  const tb=document.getElementById('mon-tbody'); tb.innerHTML='';
+  const cnt=document.getElementById('search-count');
+  if(cnt) cnt.textContent=q?(list.length+' / '+pano.results.length+' monuments'):'';
+  if(!list.length){
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td colspan="5" style="text-align:center;color:var(--text2);font-style:italic;padding:14px">'+t('search_none')+'</td>';
+    tb.appendChild(tr); return;
+  }
+  list.forEach(m=>{
+    const nm=state.lang==='fr'?m.n_fr:m.n_en;
+    const col=CAT_COLOR[m.cat]||'#888';
+    const tr=document.createElement('tr');
+    if(m.id===selectedId) tr.classList.add('sel');
+    /* Surligner le terme recherché */
+    let nmHtml=nm;
+    if(q){
+      /* Surlignage insensible aux accents : on cherche position par position */
+      const normNm=normalize(nm), normQ=normalize(q);
+      let result='', i=0;
+      while(i<nm.length){
+        if(normNm.slice(i,i+normQ.length)===normQ){
+          result+='<mark style="background:rgba(201,168,76,0.35);color:var(--gold);border-radius:2px">'+nm.slice(i,i+normQ.length)+'</mark>';
+          i+=normQ.length;
+        }else{
+          result+=nm[i]; i++;
+        }
+      }
+      nmHtml=result;
+    }
+    tr.innerHTML='<td><span class="dot" style="background:'+col+'"></span>'+nmHtml+'</td>'
+      +'<td><span class="az-badge">'+Math.round(m.az)+'°</span></td>'
+      +'<td style="color:var(--text2)">'+dirCard(m.az)+'</td>'
+      +'<td>'+fmtDist(m.dist)+'</td>'
+      +'<td style="color:'+(m.elev>=0?'#1D9E75':'#888')+'">'+(m.elev>=0?'+':'')+m.elev.toFixed(1)+'°</td>';
+    tr.onclick=()=>{ pano.offsetX=azToVX(m.az); clampOffset(); openDetail(m.id); };
+    tb.appendChild(tr);
+  });
+}
+
 function drawTable(){
+  /* Réinitialiser la recherche à chaque nouveau calcul */
+  const inp=document.getElementById('mon-search');
+  if(inp) inp.value='';
+  const btn=document.getElementById('search-clear');
+  if(btn) btn.style.display='none';
+  const cnt=document.getElementById('search-count');
+  if(cnt) cnt.textContent='';
   const tb=document.getElementById('mon-tbody'); tb.innerHTML='';
   pano.results.forEach(m=>{
     const nm=state.lang==='fr'?m.n_fr:m.n_en;
